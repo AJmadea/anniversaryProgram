@@ -84,9 +84,9 @@ public final class RandomPhraseGenerator implements Serializable {
 						rpg = (RandomPhraseGenerator)o;
 						RandomPhraseGenerator.dl = dl;
 						rpg.loadSayings();
-						
-						rpg.updateDate(LocalDate.now());
 						rpg.setSaying(r);	
+						rpg.updateDate(LocalDate.now());
+						
 						RandomPhraseGenerator.dl.logLn("Creating rpg via parsing the save file :)");
 						RandomPhraseGenerator.dl.logLn(rpg.toString());
 				}
