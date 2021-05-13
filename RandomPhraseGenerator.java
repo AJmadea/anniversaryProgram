@@ -1,4 +1,4 @@
-package source;
+package cutie;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -17,6 +17,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
+
+import dbc.PhraseDB;
 
 public final class RandomPhraseGenerator implements Serializable {
 
@@ -44,14 +46,7 @@ public final class RandomPhraseGenerator implements Serializable {
 	}
 	
 	private void setSayingDateIndependent(Random rand) {
-		if(sayings.size() == 1) {
-			currentString = sayings.get(0);
-			return;
-		} else if(sayings.size() == 0) {
-			currentString = "Loving You!";
-			return;
-		}
-		currentString = sayings.get(rand.nextInt(sayings.size()));
+		currentString = sayings.get(rand.nextInt(sayings.size()-1));
 	}
 
 	protected static RandomPhraseGenerator init(Random r, DebugLog dl) {
@@ -86,7 +81,6 @@ public final class RandomPhraseGenerator implements Serializable {
 						rpg.loadSayings();
 						rpg.setSaying(r);	
 						rpg.updateDate(LocalDate.now());
-						
 						RandomPhraseGenerator.dl.logLn("Creating rpg via parsing the save file :)");
 						RandomPhraseGenerator.dl.logLn(rpg.toString());
 				}
@@ -105,7 +99,7 @@ public final class RandomPhraseGenerator implements Serializable {
 	
 	protected static void exit(RandomPhraseGenerator rpg) {
 		// Exit will always run after init
-		if(rpg == null) throw new IllegalArgumentException("Shouldn't write a null object to save file");
+		if(rpg == null) throw new IllegalArgumentException("RPG is null.  I shouldn't write a null object to the file.");
 		
 		Path p = Paths.get(dir,saveFile);
 		try (var oos = new ObjectOutputStream(
@@ -126,19 +120,21 @@ public final class RandomPhraseGenerator implements Serializable {
 	}
 	
 	private void loadSayings() {
-		Path p = Paths.get(dir,sayingsPath);
-
+		PhraseDB pdb = new PhraseDB();
+		dl.logLn("Attempting to connect to the DataBase...");
+		
 		try {
-			
-			if(Files.notExists(p)) {
-				Files.createFile(p);
-			} else {
+			sayings = pdb.get_phrases(dl);
+		} catch(Exception e) {
+			dl.logLn("Something went wrong when trying to connect.  Will try to parse from the normal file");
+			Path p = Paths.get(dir,sayingsPath);
+			try {
 				sayings = Files.lines(p).collect(Collectors.toList());
 				dl.logLn("Created sayings log from the .txt file");
-			}
-		} catch (IOException e) {
-			dl.logLn("Something Went Wrong Trying To Load The Cute Sayings :(");
-		} 
+			} catch (Exception e2) {
+				System.err.println("Something Went Wrong Trying To Load The Cute Sayings :(");
+			} 
+		}
 	}
 	
 	public String toString() {
@@ -151,15 +147,20 @@ public final class RandomPhraseGenerator implements Serializable {
 	
 	public String getSaying() { return currentString; }
 	
+	private boolean shouldUpdateSaying() {
+		return LocalDate.now().isAfter(lastUpdated);
+	}
+	
 	private void setSaying(Random rand) {
-		if(sayings.size() == 0) {
-			currentString = "Cutie!";
+		if(sayings != null && sayings.size() == 0) {
+			currentString = "<3";
 			return;
 		}
-		
-		if(sayings.size() == 1) currentString = sayings.get(0);
-		
-		if(LocalDate.now().isAfter(lastUpdated))
+		if(shouldUpdateSaying()) {
 			currentString = sayings.get(rand.nextInt(sayings.size()));
+			dl.logLn("Updated the phrase in RPG");
+		} else {
+			dl.logLn("Not enough time has passed to update the phrase");
+		}
 	}
 }
