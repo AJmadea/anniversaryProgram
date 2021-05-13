@@ -66,9 +66,11 @@ public class PhraseDB {
 		return queries;
 	}
 	
-	private List<String> load_new_sayings() throws IOException {
+	public List<String> load_new_sayings() throws IOException {
 		Path p = Paths.get(dir, "db_info","new_sayings.txt");
-		return Files.lines(p).collect(Collectors.toList());
+		List<String> l = Files.lines(p).collect(Collectors.toList());
+		Files.writeString(p, "");
+		return l;
 	}
 	
 	private List<String> read_credentials(DebugLog dl) {
@@ -76,7 +78,6 @@ public class PhraseDB {
 		// Username
 		// Password
 		Path p = Paths.get(dir, "db_info", "db2_stuff.txt");
-		
 		List<String> l = null;
 		try {
 			System.out.println(p.toString());
@@ -99,7 +100,7 @@ public class PhraseDB {
 		ArrayList<String> list = new ArrayList<>();
 		Connection c = null;
 		try {
-			// >:^( Get connection to db
+			// Get connection to db
 			dl.logLn("Creating connection,statment,query...");
 			c = DriverManager.getConnection(url, username, pass);
 			
