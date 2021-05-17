@@ -16,7 +16,6 @@ import java.util.stream.Collectors;
 
 import source.DebugLog;
 
-
 public class PhraseDB {
 
 	static String dir = System.getProperty("user.dir");
@@ -27,16 +26,20 @@ public class PhraseDB {
 		String url = it.next();
 		String username = it.next();
 		String pass = it.next();
-		
+		Connection c = null;
 		try {
+			ArrayList<String> queries = create_query_for_update();
+			if (queries == null || queries.size() == 0) {
+				dl.logLn("Something was wrong with at least one of the query(ies)...");
+				throw new Exception("");
+			}
 			// Get connection to db
-			Connection c = DriverManager.getConnection(url, username, pass);
+			c = DriverManager.getConnection(url, username, pass);
 			
 			// create statement
 			Statement state = c.createStatement();
 			
 			// execute query
-			ArrayList<String> queries = create_query_for_update();
 			queries.forEach(System.out::println);
 			ArrayList<Integer> results = new ArrayList<>();
 			
@@ -44,11 +47,19 @@ public class PhraseDB {
 				results.add(state.executeUpdate(query));
 			}
 			
-			results.forEach(System.out::println);
+			results.forEach(dl::log);
 			
 		} catch(Exception e) {
 			e.printStackTrace();
-		} 
+		} finally {
+			if (c != null) {
+				try {
+					c.close();
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+			}
+		}
 	}
 	
 	private ArrayList<String> create_query_for_update() throws IOException {
@@ -57,9 +68,7 @@ public class PhraseDB {
 		String base = "INSERT INTO PHRASES(PHRASE) VALUES(\'";
 		StringBuilder sb = new StringBuilder();
 		for (String str : new_sayings) {
-			sb.append(base);
-			sb.append(str);
-			sb.append("\')");
+			sb.append(base).append(str).append("\')");
 			queries.add(sb.toString());
 			sb.delete(0, sb.length());
 		}
@@ -68,15 +77,16 @@ public class PhraseDB {
 	
 	public List<String> load_new_sayings() throws IOException {
 		Path p = Paths.get(dir, "db_info","new_sayings.txt");
-		List<String> l = Files.lines(p).collect(Collectors.toList());
+		List<String> l = Files.lines(p)
+				.filter(x -> x.length() < 42)
+				.map(a -> a.replace("\'", ""))
+				.collect(Collectors.toList());
 		Files.writeString(p, "");
 		return l;
 	}
 	
 	private List<String> read_credentials(DebugLog dl) {
-		// JDBC URL
-		// Username
-		// Password
+		// JDBC URL, Username, Password
 		Path p = Paths.get(dir, "db_info", "db2_stuff.txt");
 		List<String> l = null;
 		try {
@@ -97,7 +107,7 @@ public class PhraseDB {
 		String url = it.next();
 		String username = it.next();
 		String pass = it.next();
-		ArrayList<String> list = new ArrayList<>();
+		List<String> list = new ArrayList<>();
 		Connection c = null;
 		try {
 			// Get connection to db
@@ -112,7 +122,7 @@ public class PhraseDB {
 			
 			ResultSet rs = state.executeQuery(query);
 
-			// process result set
+			// Convert resultset into arraylist
 			while (rs.next()) {
 				list.add(rs.getString(2));
 			}
