@@ -10,8 +10,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import source.DebugLog;
@@ -19,6 +21,40 @@ import source.DebugLog;
 public class PhraseDB {
 
 	static String dir = System.getProperty("user.dir");
+	private Map<String, Integer> map;
+	
+	public PhraseDB(DebugLog dl) {
+		map = new HashMap<>();
+		List<String> credentials = read_credentials(dl);
+		Iterator<String> it = credentials.iterator();
+		String url = it.next();
+		String username = it.next();
+		String pass = it.next();
+
+		Connection c = null;
+		try {
+			c = DriverManager.getConnection(url, username, pass);
+			Statement state = c.createStatement();
+			String query = "SELECT ID,PHRASE FROM PHRASES";
+			ResultSet rs = state.executeQuery(query);
+			
+			while (rs.next())
+				this.map.put(rs.getString(2), rs.getInt(1));
+			
+		} catch(Exception e) {
+			dl.logLn(e.getLocalizedMessage());
+			e.printStackTrace();
+		} finally {
+			if (c != null) {
+				try {
+					c.close();
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+		dl.logLn("Creted a map from db with size " + map.size());
+	}
 	
 	public void update_with_new_sayings(DebugLog dl) {
 		List<String> credentials = read_credentials(dl);
@@ -33,6 +69,7 @@ public class PhraseDB {
 				dl.logLn("Something was wrong with at least one of the query(ies)...");
 				throw new Exception("");
 			}
+			
 			// Get connection to db
 			c = DriverManager.getConnection(url, username, pass);
 			
@@ -101,44 +138,16 @@ public class PhraseDB {
 		return l;
 	}
 	
-	public List<String> get_phrases(DebugLog dl) {
-		List<String> credentials = read_credentials(dl);
-		Iterator<String> it = credentials.iterator();
-		String url = it.next();
-		String username = it.next();
-		String pass = it.next();
-		List<String> list = new ArrayList<>();
-		Connection c = null;
-		try {
-			// Get connection to db
-			dl.logLn("Creating connection,statment,query...");
-			c = DriverManager.getConnection(url, username, pass);
-			
-			// create statement
-			Statement state = c.createStatement();
-			
-			// execute query
-			String query = "SELECT ID,PHRASE FROM PHRASES";
-			
-			ResultSet rs = state.executeQuery(query);
-
-			// Convert resultset into arraylist
-			while (rs.next()) {
-				list.add(rs.getString(2));
-			}
-		} catch(Exception e) {
-			dl.logLn("D: Something went wrong");
-			e.printStackTrace();
-		} finally {
-			if (c != null) {
-				try {
-					c.close();
-				} catch (SQLException e) {
-					e.printStackTrace();
-				}
-			}
-		}
-		dl.logLn("Received a list from db of size " + list.size());
-		return list;
+	public List<Integer> getIDs() {
+		return map.values().stream().collect(Collectors.toList());
 	}
+	
+	public Map<String, Integer> getMap() {
+		return map;
+	}
+
+	public List<String> getPhrases() {
+		return map.keySet().stream().collect(Collectors.toList());
+	}
+	
 }
