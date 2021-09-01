@@ -5,7 +5,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.TreeSet;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 public class DebugLog {
@@ -26,6 +28,17 @@ public class DebugLog {
 	protected void logLn(String str) {
 		sb.append(str).append("\n");
 	}	
+	
+	public <K,V> void logMap(Map<K, V> map, Predicate<V> pred) {
+		if (map != null) {
+			for(K k : map.keySet()) {
+				if (pred.test(map.get(k))) 
+					this.logLn(k.toString() + "\t" + map.get(k).toString());
+			}
+		} else {
+			this.logLn("Tried to write Map to log file, but the map object is null");
+		}
+	}
 	
 	protected void flush() throws IOException {
 		Path p = Paths.get(folder);
