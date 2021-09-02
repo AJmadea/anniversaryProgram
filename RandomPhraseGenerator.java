@@ -20,8 +20,6 @@ import java.util.Map;
 import java.util.Random;
 import java.util.stream.Collectors;
 
-import dbc.PhraseDB;
-
 public final class RandomPhraseGenerator implements Serializable {
 
 	private static final String dir;
@@ -32,8 +30,7 @@ public final class RandomPhraseGenerator implements Serializable {
 	private transient List<String> sayings;
 	private String currentString;
 	private LocalDate lastUpdated;
-	private transient Map<String, Integer> db_map;
-	private HashMap<Integer, Integer> map;
+	private transient FrequencyMap fm;
 	private static transient DebugLog dl;
 	public transient boolean db_fail_flag = true;
 	
@@ -46,7 +43,7 @@ public final class RandomPhraseGenerator implements Serializable {
 		sayings = new ArrayList<>();
 		lastUpdated = ld;
 		loadSayings();
-		initMap();
+		
 		setSayingDateIndependent(rand);
 		
 		dl.logLn("Creating rpg via constructor");
@@ -54,7 +51,7 @@ public final class RandomPhraseGenerator implements Serializable {
 	
 	private void setSayingDateIndependent(Random rand) {
 		setSayingMapDependent(rand);
-		updateMap(currentString);
+		fm.updateMap(currentString);
 	}
 
 	/*
@@ -63,9 +60,10 @@ public final class RandomPhraseGenerator implements Serializable {
 	 */
 	private void setSayingMapDependent(Random rand) {
 		RandomCollection<String> rc = new RandomCollection<>(rand);
+		Map<Integer, Integer> map = fm.getMap();
 		
 		// Reverse the db_map
-		Map<Integer, String> rev_db_map = db_map.entrySet().stream()
+		Map<Integer, String> rev_db_map = fm.getDBMap().entrySet().stream()
 				.collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
 		
 		/*
@@ -82,57 +80,16 @@ public final class RandomPhraseGenerator implements Serializable {
 			weights.put(i, w);
 		}
 		
-		dl.logLn("Weights map:");
-		dl.logMap(weights, t -> true);
-		
 		// Adding the weights and strings to the RandomCollection object.
 		for (Integer i : rev_db_map.keySet()) 
 			rc.add(weights.get(i), rev_db_map.get(i));
 		
 		currentString = rc.next();
+		dl.logLn("Got a new phrase from map dependent method");
 	}
 	
 	private void getRandomSayingFromList(Random rand) {
 		currentString = sayings.get(rand.nextInt(sayings.size()-1));
-	}
-	
-	private void updateMap(String str) {
-		int id = db_map.get(str);
-		dl.logLn("map == null " + (map == null));
-		//System.out.println(map);
-		
-		if (map == null) initMap();
-		
-		if (map.containsKey(id)) {
-			int temp = map.get(id);
-			map.replace(id, temp+1);
-		} else { 
-			map.put(id, 1);
-		}
-		dl.logLn("Freq Map");
-		dl.logMap(map, t -> t > 0);
-	}
-	
-	private void updateMapID() {
-		for(String str : db_map.keySet()) {
-			int id = db_map.get(str);
-			if(!map.containsKey(id)) 
-				map.put(id, 0);
-		}
-	}
-	
-	private void initMap() {
-		if (map == null) {
-			map = new HashMap<Integer, Integer>();
-			if (db_map != null) 
-				db_map.forEach((k,v) -> map.put(v, 0));
-			
-			dl.logLn("Initialized a new map.");
-			System.out.println("Init new map");
-		} else {
-			dl.logLn("Map was loaded from save file.");
-			System.out.println("Map loaded from file.");
-		}
 	}
 	
 	protected static RandomPhraseGenerator init(Random r, DebugLog dl) {
@@ -165,12 +122,13 @@ public final class RandomPhraseGenerator implements Serializable {
 						rpg = (RandomPhraseGenerator)o;
 						RandomPhraseGenerator.dl = dl;
 						
-						rpg.loadSayings();
-						rpg.initMap();
+						rpg.setFreqMap(FrequencyMap.init(dl));
+						
+						rpg.loadSayings();						
 						rpg.setSaying(r);	
 						rpg.updateDate(LocalDate.now());
-						RandomPhraseGenerator.dl.logLn("Creating rpg via parsing the save file");
-						RandomPhraseGenerator.dl.logLn(rpg.toString());
+						RandomPhraseGenerator.dl.logLn("Created rpg via parsing the save file");
+						//RandomPhraseGenerator.dl.logLn(rpg.toString());
 				}
 			} catch(ClassNotFoundException e) {
 				System.out.println("ClassNotFound while trying to parse from file");
@@ -185,9 +143,15 @@ public final class RandomPhraseGenerator implements Serializable {
 		return rpg;
 	}
 	
+	private void setFreqMap(FrequencyMap fm) {
+		this.fm = fm;
+	}
+	
 	protected static void exit(RandomPhraseGenerator rpg) {
 		// Exit will always run after init
 		if(rpg == null) throw new IllegalArgumentException("RPG is null.  Cannot write a null object to the file.");
+		
+		FrequencyMap.exit(rpg.fm);
 		
 		Path p = Paths.get(dir,saveFile);
 		try (var oos = new ObjectOutputStream(
@@ -196,7 +160,7 @@ public final class RandomPhraseGenerator implements Serializable {
 								p.toFile())))) {
 			dl.logLn("Wrote RPG to save file");
 			oos.writeObject(rpg);
-			System.out.println("");
+			
 		} catch (IOException e) {
 			dl.logLn(e.getMessage());
 		}
@@ -208,12 +172,8 @@ public final class RandomPhraseGenerator implements Serializable {
 	}
 	
 	private void loadSayings() {
-		dl.logLn("Attempting to connect to the DataBase...");
-		
 		try {
-			PhraseDB pdb = new PhraseDB(dl);
-			this.db_map = pdb.getMap();
-			sayings = pdb.getPhrases();
+			sayings = fm.getDBMap().keySet().stream().collect(Collectors.toList());
 			
 		} catch(Exception e) {
 			dl.logLn("Something went wrong when trying to connect.  Will try to parse from the normal file");
@@ -248,10 +208,10 @@ public final class RandomPhraseGenerator implements Serializable {
 			return;
 		}
 		if(shouldUpdateSaying()) {
-			if(db_fail_flag) {
-				updateMapID();
+			dl.logLn("dbFail Flag is: " + fm.getFlag());
+			if(fm.getFlag()) {
 				setSayingMapDependent(rand);
-				updateMap(currentString);
+				fm.updateMap(currentString);
 			} else {
 				getRandomSayingFromList(rand);
 			}
